@@ -61,32 +61,32 @@ async function run() {
       res.cookie("token", token, cookieOption);
       res.send({ Success: true });
     });
-    app.post("/logout", async (req, res) => {
-      const user = req.body;
-      res.clearCookie("token", { ...cookieOption, maxAge: 0 });
-      res.send({ success: true });
+    app.get("/logout", async (req, res) => {
+      try {
+        res.clearCookie("token", { ...cookieOption, maxAge: 0 });
+        res.send({ success: true });
+      } catch (err) {
+        res.status(500).send(err);
+      }
     });
     // *?JWT End
     // *? DataBase Collections :
     const usersCollection = client.db("PRB9-A12").collection("users");
-    const bookedCollection = client.db("PRB9-A12").collection("booked");
+    const parcelsCollection = client.db("PRB9-A12").collection("parcels");
 
     //  ** verify Admin & DeliveryMan middleware
     const verifyAdmin = async (req, res, next) => {
       const user = req.user;
       const query = { email: user?.email };
-      // todo: Add Correct Collection name here
-      const result = await "collectionName".findOne(query);
+      const result = await usersCollection.findOne(query);
       if (!result || result?.role !== "admin")
         return res.status(401).send({ message: "unauthorized access!!" });
-
       next();
     };
     const verifydeliveryMan = async (req, res, next) => {
       const user = req.user;
       const query = { email: user?.email };
-      // todo: Add Correct Collection name here
-      const result = await "collectionName".findOne(query);
+      const result = await usersCollection.findOne(query);
       if (!result || result?.role !== "deliveryMan") {
         return res.status(401).send({ message: "unauthorized access!!" });
       }
@@ -94,7 +94,6 @@ async function run() {
     };
 
     // ** All CRUD Operated --
-
     //  *? Add User Details in DB
     app.put("/users", async (req, res) => {
       const user = req.body;
@@ -130,7 +129,7 @@ async function run() {
       // res.send(result);
     });
     //  *? Get User Details from DB
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyAdmin, async (req, res) => {
       const items = usersCollection.find();
       const result = await items.toArray();
       res.send(result);
