@@ -7,7 +7,7 @@ const jwt = require("jsonwebtoken");
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
-// **MIDDLEWARE
+// *?MIDDLEWARE
 app.use(
   cors({
     origin: ["http://localhost:5173"],
@@ -17,7 +17,7 @@ app.use(
 );
 app.use(express.json());
 app.use(cookieParser());
-// ** jwt middleware
+// *? jwt middleware
 const verifyToken = (req, res, next) => {
   const token = req.cookies?.token;
   if (!token) {
@@ -47,7 +47,7 @@ async function run() {
     await client.db("admin").command({ ping: 1 });
     console.log("You successfully connected to MongoDB!");
 
-    // **JWT added
+    // *?JWT added
     const cookieOption = {
       httpOnly: true,
       secure: true,
@@ -66,9 +66,9 @@ async function run() {
       res.clearCookie("token", { ...cookieOption, maxAge: 0 });
       res.send({ success: true });
     });
-    // **JWT End
-    // ** DataBase Collections :
-    const userCollection = client.db("PRB9-A12").collection("users");
+    // *?JWT End
+    // *? DataBase Collections :
+    const usersCollection = client.db("PRB9-A12").collection("users");
     const bookedCollection = client.db("PRB9-A12").collection("booked");
 
     //  ** verify Admin & DeliveryMan middleware
@@ -94,6 +94,47 @@ async function run() {
     };
 
     // ** All CRUD Operated --
+
+    //  *? Add User Details in DB
+    app.put("/users", async (req, res) => {
+      const user = req.body;
+      const query = { email: user?.email };
+      // check if user already exists in db
+      const isExist = await usersCollection.findOne(query);
+      if (isExist) {
+        if (user.role === "Requested") {
+          // if existing user try to change his role
+          const result = await users.updateOne(query, {
+            $set: { status: user?.role },
+          });
+          return res.send(result);
+        } else {
+          // if existing user login again
+          return res.send(isExist);
+        }
+      }
+      // save user for the first time
+      const options = { upsert: true };
+      const updateDoc = {
+        $set: {
+          ...user,
+          timestamp: Date.now(),
+        },
+      };
+      const result = await usersCollection.updateOne(query, updateDoc, options);
+      // welcome new user
+      // sendEmail(user?.email, {
+      //   subject: "Welcome to Stayvista!",
+      //   message: `Hope you will find you destination`,
+      // });
+      // res.send(result);
+    });
+    //  *? Get User Details from DB
+    app.get("/users", async (req, res) => {
+      const items = usersCollection.find();
+      const result = await items.toArray();
+      res.send(result);
+    });
   } finally {
     // await client.close();
   }
