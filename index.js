@@ -126,12 +126,12 @@ async function run() {
       //   subject: "Welcome to Stayvista!",
       //   message: `Hope you will find you destination`,
       // });
-      // res.send(result);
+      res.send(result);
     });
     //  *? Get User Details from DB
-    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
-      const items = usersCollection.find();
-      const result = await items.toArray();
+    app.get("/users/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const result = await usersCollection.findOne({ email });
       res.send(result);
     });
   } finally {
