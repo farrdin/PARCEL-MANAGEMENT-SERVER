@@ -56,7 +56,7 @@ async function run() {
     app.post("/jwt", async (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: "1h",
+        expiresIn: "12h",
       });
       res.cookie("token", token, cookieOption);
       res.send({ Success: true });
@@ -94,25 +94,10 @@ async function run() {
     };
 
     // ** All CRUD Operated --
-    //  *? Add User Details in DB
+    //  *? Add User Details in DB from Registration
     app.put("/users", async (req, res) => {
       const user = req.body;
       const query = { email: user?.email };
-      // check if user already exists in db
-      const isExist = await usersCollection.findOne(query);
-      if (isExist) {
-        if (user.role === "Requested") {
-          // if existing user try to change his role
-          const result = await users.updateOne(query, {
-            $set: { status: user?.role },
-          });
-          return res.send(result);
-        } else {
-          // if existing user login again
-          return res.send(isExist);
-        }
-      }
-      // save user for the first time
       const options = { upsert: true };
       const updateDoc = {
         $set: {
@@ -121,18 +106,46 @@ async function run() {
         },
       };
       const result = await usersCollection.updateOne(query, updateDoc, options);
-      // welcome new user
-      // sendEmail(user?.email, {
-      //   subject: "Welcome to Stayvista!",
-      //   message: `Hope you will find you destination`,
-      // });
       res.send(result);
     });
+    //  *? Add User Details in DB from SocialLogin
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      const query = { email: user?.email };
+      try {
+        const existingUser = await usersCollection.findOne({ query });
+        if (!existingUser) {
+          const newUser = {
+            ...user,
+            timestamp: Date.now(),
+          };
+          const result = await usersCollection.insertOne(newUser);
+          res.status(201).send(result);
+        } else {
+          res.status(400).send({ message: "User already exists" });
+        }
+      } catch (error) {
+        console.error("Error creating user:", error);
+        res.status(500).send("Internal server error");
+      }
+    });
     //  *? Get User Details from DB
-    app.get("/users/:email", verifyToken, async (req, res) => {
+    app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
-      const result = await usersCollection.findOne({ email });
-      res.send(result);
+      if (email && typeof email === "string") {
+        const mail = email.toLowerCase();
+        const result = await usersCollection.findOne({
+          email: mail,
+        });
+        console.log(result);
+        if (result) {
+          res.status(200).send(result);
+        } else {
+          res.status(404).send({ message: "User not found" });
+        }
+      } else {
+        res.status(400).send({ message: "Invalid email" });
+      }
     });
   } finally {
     // await client.close();
