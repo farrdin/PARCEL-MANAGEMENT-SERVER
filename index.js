@@ -108,27 +108,6 @@ async function run() {
       const result = await usersCollection.updateOne(query, updateDoc, options);
       res.send(result);
     });
-    //  *? Add User Details in DB from SocialLogin
-    app.post("/users", async (req, res) => {
-      const user = req.body;
-      const query = { email: user?.email };
-      try {
-        const existingUser = await usersCollection.findOne({ query });
-        if (!existingUser) {
-          const newUser = {
-            ...user,
-            timestamp: Date.now(),
-          };
-          const result = await usersCollection.insertOne(newUser);
-          res.status(201).send(result);
-        } else {
-          res.status(400).send({ message: "User already exists" });
-        }
-      } catch (error) {
-        console.error("Error creating user:", error);
-        res.status(500).send("Internal server error");
-      }
-    });
     //  *? Get User Details from DB
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
@@ -147,11 +126,16 @@ async function run() {
         res.status(400).send({ message: "Invalid email" });
       }
     });
+    // *? Post Parcel Bookings
+    app.post("/book-parcel", verifyToken, async (req, res) => {
+      const bookParcel = req.body;
+      const result = await parcelsCollection.insertOne(bookParcel);
+      res.send(result);
+    });
   } finally {
     // await client.close();
   }
 }
-
 run().catch(console.dir);
 app.get("/", (req, res) => {
   res.send("Parcel Management is running");
