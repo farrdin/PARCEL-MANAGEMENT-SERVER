@@ -109,14 +109,13 @@ async function run() {
       res.send(result);
     });
     //  *? Get User Details from DB
-    app.get("/users/:email", async (req, res) => {
+    app.get("/users/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       if (email && typeof email === "string") {
         const mail = email.toLowerCase();
         const result = await usersCollection.findOne({
           email: mail,
         });
-        console.log(result);
         if (result) {
           res.status(200).send(result);
         } else {
@@ -127,9 +126,16 @@ async function run() {
       }
     });
     // *? Post Parcel Bookings
-    app.post("/book-parcel", verifyToken, async (req, res) => {
+    app.post("/parcels", verifyToken, async (req, res) => {
       const bookParcel = req.body;
       const result = await parcelsCollection.insertOne(bookParcel);
+      res.send(result);
+    });
+    // *? Get parcel details by user email
+    app.get("/parcels/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const query = { email };
+      const result = await parcelsCollection.find(query).toArray();
       res.send(result);
     });
   } finally {
