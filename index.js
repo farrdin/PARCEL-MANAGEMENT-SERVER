@@ -4,9 +4,9 @@ const app = express();
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
+const stripe = require("stripe")(process.env.STRIPE_KEY);
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
 // *?MIDDLEWARE
 app.use(
   cors({
@@ -70,9 +70,24 @@ async function run() {
       }
     });
     // *?JWT End
+    // *? Stipe Payment Added
+    app.post("/create-payment-intent", verifyToken, async (req, res) => {
+      const price = req.body.price;
+      const priceInCent = parseFloat(price) * 100;
+      if (!price || priceInCent < 1) return;
+      const { client_secret } = await stripe.paymentIntents.create({
+        amount: priceInCent,
+        currency: "usd",
+        automatic_payment_methods: {
+          enabled: true,
+        },
+      });
+      res.send({ clientSecret: client_secret });
+    });
     // *? DataBase Collections :
     const usersCollection = client.db("PRB9-A12").collection("users");
     const parcelsCollection = client.db("PRB9-A12").collection("parcels");
+    const reviewsCollection = client.db("PRB9-A12").collection("reviews");
 
     //  ** verify Admin & DeliveryMan middleware
     const verifyAdmin = async (req, res, next) => {
@@ -108,6 +123,11 @@ async function run() {
       const result = await usersCollection.updateOne(query, updateDoc, options);
       res.send(result);
     });
+    // *? Get all User By admin
+    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    });
     //  *? Get User Details from DB
     app.get("/users/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
@@ -125,6 +145,31 @@ async function run() {
         res.status(400).send({ message: "Invalid email" });
       }
     });
+    // *? Update Role by Admin
+    // Update Role by Admin
+    app.patch(
+      "/users/update/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const { role } = req.body;
+        if (!role) {
+          return res.status(400).send({ message: "Role is required" });
+        }
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: { role },
+        };
+        const result = await usersCollection.updateOne(filter, updateDoc);
+        if (result.modifiedCount === 0) {
+          return res
+            .status(404)
+            .send({ message: "User not found or role unchanged" });
+        }
+        res.send({ message: "User role updated successfully", result });
+      }
+    );
     // *? Post Parcel Bookings
     app.post("/parcels", verifyToken, async (req, res) => {
       const bookParcel = req.body;
@@ -137,6 +182,62 @@ async function run() {
       const query = { email };
       const result = await parcelsCollection.find(query).toArray();
       res.send(result);
+    });
+    // *? Update Parcel By user,admin,deliveryMan
+    app.patch("/parcels/update/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const userMail = req.user.email;
+      const updatedData = req.body;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: updatedData,
+      };
+      try {
+        const result = await parcelsCollection.updateOne(filter, updateDoc);
+        if (result.modifiedCount > 0) {
+          if (updatedData.status === "Delivered" && userMail) {
+            await usersCollection.updateOne(
+              { email: userMail },
+              { $inc: { deliveryCount: 1 } }
+            );
+          }
+          res
+            .status(200)
+            .send({ success: true, message: "Parcel updated successfully" });
+        } else {
+          res.status(404).send({ success: false, message: "Parcel not found" });
+        }
+      } catch (error) {
+        console.error("Backend error:", error);
+        res.status(500).send({ success: false, message: "Server error" });
+      }
+    });
+    // *? Cancel Parsel Status by user
+    app.patch("/parcels/cancel/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: { status: "Cancelled" },
+      };
+      const result = await parcelsCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+    // *? Get all Booked parcel By admin
+    app.get("/parcels", verifyToken, verifyAdmin, async (req, res) => {
+      const result = await parcelsCollection.find().toArray();
+      res.send(result);
+    });
+    // *? Get DeliveryList of Assigned delivery Man
+    app.get("/parcels-assigned", verifyToken, async (req, res) => {
+      const userMail = req.user.email;
+      const query = { assigned: userMail };
+      try {
+        const result = await parcelsCollection.find(query).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Failed to fetch user-specific parcels", error);
+        res.status(500).send({ error: "Failed to fetch parcels" });
+      }
     });
   } finally {
     // await client.close();
