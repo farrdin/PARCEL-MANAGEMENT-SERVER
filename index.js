@@ -247,9 +247,43 @@ async function run() {
     // *? Get Reviews  by deliveryMan email
     app.get("/reviews/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
-      const query = { email };
+      const query = { deliverMail: email };
       const result = await reviewsCollection.find(query).toArray();
       res.send(result);
+    });
+    // *? Calculate average review for DeliveryMan
+    app.get("/delivery-men", verifyToken, async (req, res) => {
+      try {
+        const deliveryMen = await usersCollection
+          .find({ role: "deliveryMan" })
+          .toArray();
+        const deliveryMenWithRatings = await Promise.all(
+          deliveryMen.map(async (deliveryMan) => {
+            const reviews = await reviewsCollection
+              .find({ deliverMail: deliveryMan.email })
+              .toArray();
+            const totalRatings = reviews.reduce(
+              (acc, review) => acc + review.rating,
+              0
+            );
+            const averageRating =
+              reviews.length > 0 ? totalRatings / reviews.length : 0;
+            return {
+              ...deliveryMan,
+              averageRating: parseFloat(averageRating.toFixed(1)),
+            };
+          })
+        );
+        res.send(deliveryMenWithRatings);
+      } catch (error) {
+        console.error(
+          "Failed to get delivery men with average ratings:",
+          error
+        );
+        res
+          .status(500)
+          .send({ error: "Failed to get delivery men with average ratings" });
+      }
     });
   } finally {
     // await client.close();
