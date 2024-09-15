@@ -215,7 +215,7 @@ async function run() {
         res.status(500).send({ success: false, message: "Server error" });
       }
     });
-    // *? Cancel Parsel Status by user
+    // *? Cancel Parsel Status by user,deliveryMan
     app.patch("/parcels/cancel/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
@@ -288,6 +288,23 @@ async function run() {
           .status(500)
           .send({ error: "Failed to get delivery men with average ratings" });
       }
+    });
+    // *? Get NUMBER of All Users
+    app.get("/number-users", verifyToken, async (req, res) => {
+      const count = await usersCollection.countDocuments();
+      res.send({ totalUsers: count });
+    });
+    // *? Get NUMBER of All Delivered Parcels
+    app.get("/number-delivered", verifyToken, async (req, res) => {
+      const count = await parcelsCollection.countDocuments({
+        status: "Delivered",
+      });
+      res.send({ deliveredParcels: count });
+    });
+    // *? Get NUMBER of All Booked Parcels
+    app.get("/number-parcels", verifyToken, async (req, res) => {
+      const count = await parcelsCollection.countDocuments();
+      res.send({ totalBookedParcels: count });
     });
   } finally {
     // await client.close();
