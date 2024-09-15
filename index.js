@@ -146,7 +146,6 @@ async function run() {
       }
     });
     // *? Update Role by Admin
-    // Update Role by Admin
     app.patch(
       "/users/update/:id",
       verifyToken,
@@ -183,7 +182,7 @@ async function run() {
       const result = await parcelsCollection.find(query).toArray();
       res.send(result);
     });
-    // *? Update Parcel By user,admin,deliveryMan
+    // *? Update Parcel status By user,admin,deliveryMan
     app.patch("/parcels/update/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const userMail = req.user.email;
@@ -238,6 +237,19 @@ async function run() {
         console.error("Failed to fetch user-specific parcels", error);
         res.status(500).send({ error: "Failed to fetch parcels" });
       }
+    });
+    // *? post All reviews to reviewsCollection
+    app.post("/reviews", verifyToken, async (req, res) => {
+      const review = req.body;
+      const result = await reviewsCollection.insertOne(review);
+      res.send(result);
+    });
+    // *? Get Reviews  by deliveryMan email
+    app.get("/reviews/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      const query = { email };
+      const result = await reviewsCollection.find(query).toArray();
+      res.send(result);
     });
   } finally {
     // await client.close();
