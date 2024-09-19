@@ -2,7 +2,6 @@ require("dotenv").config();
 const express = require("express");
 const app = express();
 const cors = require("cors");
-const cookieParser = require("cookie-parser");
 const jwt = require("jsonwebtoken");
 const stripe = require("stripe")(process.env.STRIPE_KEY);
 const port = process.env.PORT || 5000;
@@ -20,10 +19,13 @@ app.use(
   })
 );
 app.use(express.json());
-app.use(cookieParser());
 // *? jwt middleware
 const verifyToken = (req, res, next) => {
-  const token = req.cookies?.token;
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ message: "Unauthorized Access!" });
+  }
+  const token = authHeader.split(" ")[1];
   if (!token) {
     return res.status(401).send({ message: "Unauthorized Access!" });
   }
@@ -52,26 +54,12 @@ async function run() {
     // console.log("You successfully connected to MongoDB!");
 
     // *?JWT added
-    const cookieOption = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
-    };
     app.post("/jwt", async (req, res) => {
       const user = req.body;
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
         expiresIn: "12h",
       });
-      res.cookie("token", token, cookieOption);
-      res.send({ Success: true });
-    });
-    app.get("/logout", async (req, res) => {
-      try {
-        res.clearCookie("token", { ...cookieOption, maxAge: 0 });
-        res.send({ success: true });
-      } catch (err) {
-        res.status(500).send(err);
-      }
+      res.send({ Success: true, token });
     });
     // *?JWT End
     // *? Stipe Payment Added
@@ -113,7 +101,7 @@ async function run() {
     };
 
     // ** All CRUD Operated --
-    //  *? Add User Details in DB from Registration
+    //  *? Add User Details in DB
     app.put("/users", async (req, res) => {
       const user = req.body;
       const query = { email: user?.email };
@@ -231,17 +219,22 @@ async function run() {
       res.send(result);
     });
     // *? Get DeliveryList of Assigned delivery Man
-    app.get("/parcels-assigned", verifyToken, async (req, res) => {
-      const userMail = req.user.email;
-      const query = { assigned: userMail };
-      try {
-        const result = await parcelsCollection.find(query).toArray();
-        res.send(result);
-      } catch (error) {
-        console.error("Failed to fetch user-specific parcels", error);
-        res.status(500).send({ error: "Failed to fetch parcels" });
+    app.get(
+      "/parcels-assigned",
+      verifyToken,
+      verifydeliveryMan,
+      async (req, res) => {
+        const userMail = req.user.email;
+        const query = { assigned: userMail };
+        try {
+          const result = await parcelsCollection.find(query).toArray();
+          res.send(result);
+        } catch (error) {
+          console.error("Failed to fetch user-specific parcels", error);
+          res.status(500).send({ error: "Failed to fetch parcels" });
+        }
       }
-    });
+    );
     // *? post All reviews to reviewsCollection
     app.post("/reviews", verifyToken, async (req, res) => {
       const review = req.body;
@@ -256,7 +249,7 @@ async function run() {
       res.send(result);
     });
     // *? Calculate average review for DeliveryMan
-    app.get("/delivery-men", verifyToken, async (req, res) => {
+    app.get("/delivery-men", async (req, res) => {
       try {
         const deliveryMen = await usersCollection
           .find({ role: "deliveryMan" })
@@ -290,19 +283,19 @@ async function run() {
       }
     });
     // *? Get NUMBER of All Users
-    app.get("/number-users", verifyToken, async (req, res) => {
+    app.get("/number-users", async (req, res) => {
       const count = await usersCollection.countDocuments();
       res.send({ totalUsers: count });
     });
     // *? Get NUMBER of All Delivered Parcels
-    app.get("/number-delivered", verifyToken, async (req, res) => {
+    app.get("/number-delivered", async (req, res) => {
       const count = await parcelsCollection.countDocuments({
         status: "Delivered",
       });
       res.send({ deliveredParcels: count });
     });
     // *? Get NUMBER of All Booked Parcels
-    app.get("/number-parcels", verifyToken, async (req, res) => {
+    app.get("/number-parcels", async (req, res) => {
       const count = await parcelsCollection.countDocuments();
       res.send({ totalBookedParcels: count });
     });
